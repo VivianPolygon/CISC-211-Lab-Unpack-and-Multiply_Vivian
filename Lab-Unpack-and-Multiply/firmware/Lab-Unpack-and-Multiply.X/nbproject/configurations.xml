@@ -245,6 +245,7 @@
       <itemPath>../src/main.c</itemPath>
       <itemPath>../src/asmMult.s</itemPath>
       <itemPath>../src/asmExterns.h</itemPath>
+      <itemPath>../src/asmExterns.c</itemPath>
     </logicalFolder>
   </logicalFolder>
   <sourceRootList>
