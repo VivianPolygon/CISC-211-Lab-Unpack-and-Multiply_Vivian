@@ -56,32 +56,19 @@ static volatile bool changeTempSamplingRate = false;
 static volatile bool isUSARTTxComplete = true;
 static uint8_t uartTxBuffer[MAX_PRINT_LEN] = {0};
 
-#if 0
-// Test cases for testing func that adds 3 nums and returns the results
-// AND sets bits in global variables.
-static int32_t depositArray[] = {  0x80000001, 0, 0x80000001,
-                                   5,5,6};
-static int32_t withdrawalArray[] = {  0x80000001, 0x80000001, 0,
-                                      -2, -6, 5};
-static int32_t balanceArray[] = {  0, 0x80000001, 0x80000001,
-                                  -3, -9, 4};
-static int32_t problemArray[] = {1,1,1,0,0,0};
-#endif
-
-// the following array defines pairs of {balance, transaction} values
+// the following array defines pairs of {multiplicand/multiplier} values.
+// The C code will pack these together prior to calling the assembly code.
 // tc stands for test case
 static int32_t tc[][2] = {
-    {         -4,          3},  // -,+
-    {          0,          0},  // 0,0
-    {          0,          5},  // 0,+
-    {          0, 0xFFFFFFFC},  // 0,-
-    { 0xFFFFFFFD,          0},  // -,0
-    {          2,          0},  // +,0
-    {     -32768,     -32768},  // -,-
-    { 0x00007FF3, 0xFFFF8001},  // +,-
-    { 0x00007FF1, 0x00007FF2},  // +,+
-    {      32768,      32768},  // limits test
-    {     -32769,     -32769}   // limits test
+    {         -4,          3},  // -,+   tc #0
+    {          0,          0},  // 0,0   tc #1
+    {          0,          5},  // 0,+   tc #2
+    {          0, 0xFFFFFFFC},  // 0,-   tc #3
+    { 0xFFFFFFFD,          0},  // -,0   tc #4
+    {          2,          0},  // +,0   tc #5
+    {     -32768,     -32768},  // -,-   tc #6
+    { 0x00007FF3, 0xFFFF8001},  // +,-   tc #7
+    { 0x00007FF1, 0x00007FF2}   // +,+   tc #8
 };
 
 static char * pass = "PASS";
@@ -95,10 +82,9 @@ static char * fail = "FAIL *****";
 // value.
 //
 // Function signature
-// for this lab, the function takes two args: multiplicand and multiplier.
-// Both inputs are signed, and limited to the range [-2^15,(2^15) - 1]
-// The result of their product is returned.
-extern int32_t asmMult(int32_t multiplicand, int32_t multiplier);
+// for this lab, the function takes two one arg: a 32 bit value containing
+// in upper 16 bits, and multiplier in lower 16 bits.
+extern int32_t asmMult(uint32_t packedValue);
 
 
 // set this to 0 if using the simulator. BUT note that the simulator
@@ -122,6 +108,21 @@ static void usartDmaChannelHandler(DMAC_TRANSFER_EVENT event, uintptr_t contextH
 }
 #endif
 
+// pack(a,b)
+// packs "a" LSB's into upper 16b of returned value
+// packs "b" LSB's into lower 16b of returned value
+static uint32_t pack(int32_t a, int32_t b)
+{
+    a <<= 16;
+    b &= 0xFFFF;
+    uint32_t packed = a | b;
+    return packed;
+}
+
+// check() utility function
+// if two input values match, increment pass counter and return string
+// representing test passed.
+// otherwise, increment fail counter and return string representing failure
 static void check(int32_t in1, 
         int32_t in2, 
         int32_t *goodCount, 
@@ -148,27 +149,27 @@ static void printGlobalAddresses(void)
     // build the string to be sent out over the serial lines
     snprintf((char*)uartTxBuffer, MAX_PRINT_LEN,
             "========= GLOBAL VARIABLES MEMORY ADDRESS LIST\r\n"
+            "global variable \"packed_Value\" stored at address:   0x%" PRIXPTR "\r\n"
             "global variable \"a_Multiplicand\" stored at address: 0x%" PRIXPTR "\r\n"
             "global variable \"b_Multiplier\" stored at address:   0x%" PRIXPTR "\r\n"
-            "global variable \"rng_Error\" stored at address:      0x%" PRIXPTR "\r\n"
             "global variable \"a_Sign\" stored at address:         0x%" PRIXPTR "\r\n"
             "global variable \"b_Sign\" stored at address:         0x%" PRIXPTR "\r\n"
             "global variable \"prod_Is_Neg\" stored at address:    0x%" PRIXPTR "\r\n"
             "global variable \"a_Abs\" stored at address:          0x%" PRIXPTR "\r\n"
             "global variable \"b_Abs\" stored at address:          0x%" PRIXPTR "\r\n"
-            "global variable \"init_Product\" stored at address:   0x%" PRIXPTR "\r\n"
+            "global variable \"abs_Product\" stored at address:    0x%" PRIXPTR "\r\n"
             "global variable \"final_Product\" stored at address:  0x%" PRIXPTR "\r\n"
             "========= END -- GLOBAL VARIABLES MEMORY ADDRESS LIST\r\n"
             "\r\n",
+            (uintptr_t)(&packed_Value), 
             (uintptr_t)(&a_Multiplicand), 
             (uintptr_t)(&b_Multiplier), 
-            (uintptr_t)(&rng_Error), 
             (uintptr_t)(&a_Sign), 
             (uintptr_t)(&b_Sign), 
             (uintptr_t)(&prod_Is_Neg), 
             (uintptr_t)(&a_Abs), 
             (uintptr_t)(&b_Abs),
-            (uintptr_t)(&init_Product), 
+            (uintptr_t)(&abs_Product), 
             (uintptr_t)(&final_Product)
             ); 
     isRTCExpired = false;
@@ -197,71 +198,60 @@ static int testResult(int testNum,
     // So I'm setting it up this way so it'll work for future labs, too --VB
     *failCount = 0;
     *passCount = 0;
+    char *packedCheck = "OOPS!!!!!";
     char *aCheck = "OOPS!!!!!";
     char *bCheck = "OOPS!!!!!";
-    char *rngCheck = "OOPS!!!!!";
     char *aSignCheck = "OOPS!!!!!";
     char *bSignCheck = "OOPS!!!!!";
     char *prodSignCheck = "OOPS!!!!!";
     char *aAbsCheck = "OOPS!!!!!";
     char *bAbsCheck = "OOPS!!!!!";
-    char *initProdCheck = "OOPS!!!!!";
+    char *absProdCheck = "OOPS!!!!!";
     char *finalProdCheck = "OOPS!!!!!";
     char *resultCheck = "OOPS!!!!!";
     static bool firstTime = true;
     int32_t myA = tc[testNum][0];
     int32_t myB = tc[testNum][1];
-    int32_t myErrCheck = 0;
-    if( (myA > 32767) || (myA < -32768) || (myB > 32767) || (myB < -32768) )
-    {
-        myErrCheck = 1;
-        // myA = 0;
-        // myB = 0;
-    }
-    int32_t myAbsA = 0;
-    int32_t myAbsB = 0;
-    if (myErrCheck == 0)
-    {       
-         myAbsA = abs(myA);
-         myAbsB = abs(myB);
-    }
+    uint32_t myPackedValue = pack(myA, myB);
+
+    int32_t myAbsA = abs(myA);
+    int32_t myAbsB = abs(myB);
+
+    int32_t myAbsProd = 0;
     int32_t myFinalProd = 0;
-    int32_t myInitProd = 0;
     int32_t mySignBitA = 0;
     int32_t mySignBitB = 0;
     int32_t myProdSign = 0;
     int32_t myMemA = myA; // the value the code under test was supposed to store to mem
     int32_t myMemB = myB; // the value the code under test was supposed to store to mem
-    if(myErrCheck == 0)
+                          //
+    //myMemA = myA; // the value the code under test was supposed to store to mem
+    //myMemB = myB; // the value the code under test was supposed to store to mem
+    myFinalProd = myA * myB;
+    myAbsProd = abs(myFinalProd);
+    if (myA < 0)
     {
-        //myMemA = myA; // the value the code under test was supposed to store to mem
-        //myMemB = myB; // the value the code under test was supposed to store to mem
-        myFinalProd = myA * myB;
-        myInitProd = abs(myFinalProd);
-        if (myA < 0)
-        {
-            mySignBitA = 1;
-        }
-        if (myB < 0)
-        {
-            mySignBitB = 1;
-        }
-        if (((myA < 0) && (myB > 0)) || ((myA > 0) && (myB < 0)))
-        {
-            myProdSign = 1;
-        }
+        mySignBitA = 1;
+    }
+    if (myB < 0)
+    {
+        mySignBitB = 1;
+    }
+    if (((myA < 0) && (myB > 0)) || ((myA > 0) && (myB < 0)))
+    {
+        myProdSign = 1;
     }
     
     
+    check(myPackedValue, packed_Value, passCount, failCount, &packedCheck);
     check(myMemA, a_Multiplicand, passCount, failCount, &aCheck);
     check(myMemB, b_Multiplier, passCount, failCount, &bCheck);
-    check(myErrCheck, rng_Error, passCount, failCount, &rngCheck);
     check(mySignBitA, a_Sign, passCount, failCount, &aSignCheck);
     check(mySignBitB, b_Sign, passCount, failCount, &bSignCheck);
     check(myProdSign, prod_Is_Neg, passCount, failCount, &prodSignCheck);
     check(myAbsA, a_Abs, passCount, failCount, &aAbsCheck);
     check(myAbsB, b_Abs, passCount, failCount, &bAbsCheck);
-    check(myInitProd, init_Product, passCount, failCount, &initProdCheck);
+    check(myAbsProd, abs_Product, passCount, failCount, &absProdCheck);
     check(myFinalProd, final_Product, passCount, failCount, &finalProdCheck);
     check(myFinalProd, result, passCount, failCount, &resultCheck);
     
@@ -276,54 +266,56 @@ static int testResult(int testNum,
     // build the string to be sent out over the serial lines
     snprintf((char*)uartTxBuffer, MAX_PRINT_LEN,
             "========= Test Number: %d =========\r\n"
-            "test case INPUT: multiplier (a):   %11ld\r\n"
-            "test case INPUT: multiplicand (b): %11ld\r\n"
+            "test case INPUT: packed value:                %11ld\r\n"
+            "test case INPUT: (unpacked) multiplier (a):   %11ld\r\n"
+            "test case INPUT: (unpacked) multiplicand (b): %11ld\r\n"
+            "packed mem check p/f:  %s\r\n"
             "a mem check p/f:       %s\r\n"
             "b mem check p/f:       %s\r\n"
-            "input range check p/f: %s\r\n"
             "sign bit a check p/f:  %s\r\n"
             "sign bit b check p/f:  %s\r\n"
             "prod sign check p/f:   %s\r\n"
             "abs a check p/f:       %s\r\n"
             "abs b check p/f:       %s\r\n"
-            "initial product p/f:   %s\r\n"
+            "abs product p/f:       %s\r\n"
             "final product p/f:     %s\r\n"
             "returned result p/f:   %s\r\n"
             "debug values        expected        actual\r\n"
+            "packed_Value:....%11ld   %11ld\r\n"
             "a_Multiplicand:..%11ld   %11ld\r\n"
             "b_Multiplier:....%11ld   %11ld\r\n"
-            "error check:.....%11ld   %11ld\r\n"
             "a_Sign:..........%11ld   %11ld\r\n"
             "b_Sign:..........%11ld   %11ld\r\n"
             "prod_Is_Neg:.....%11ld   %11ld\r\n"
             "a_Abs:...........%11ld   %11ld\r\n"
             "b_Abs:...........%11ld   %11ld\r\n"
-            "init_Product:....%11ld   %11ld\r\n"
+            "abs_Product:.....%11ld   %11ld\r\n"
             "final_Product:...%11ld   %11ld\r\n"
             "returned value:..%11ld   %11ld\r\n",
             testNum,
+            myPackedValue,
             myA, 
             myB,
+            packedCheck,
             aCheck,
             bCheck,
-            rngCheck,
             aSignCheck,
             bSignCheck,
             prodSignCheck,
             aAbsCheck,
             bAbsCheck,
-            initProdCheck,
+            absProdCheck,
             finalProdCheck,
             resultCheck,
+            myPackedValue, packed_Value,
             myMemA, a_Multiplicand,
             myMemB, b_Multiplier,
-            myErrCheck,rng_Error,
             mySignBitA, a_Sign,
             mySignBitB, b_Sign,
             myProdSign, prod_Is_Neg,
             myAbsA, a_Abs,
             myAbsB, b_Abs,
-            myInitProd, init_Product,
+            myAbsProd, abs_Product,
             myFinalProd, final_Product,
             myFinalProd, result
             );
@@ -409,9 +401,11 @@ int main ( void )
                 LED0_Toggle();   
             }
 
+            // pack the test values into a single 32 bit word
+            uint32_t testValue = pack(a,b);
             // !!!! THIS IS WHERE YOUR ASSEMBLY LANGUAGE PROGRAM GETS CALLED!!!!
             // Call our assembly function defined in file asmMult.s
-            int32_t result = asmMult(a, b);
+            int32_t result = asmMult(testValue);
             
             // test the result and see if it passed
             failCount = testResult(testCase,result,

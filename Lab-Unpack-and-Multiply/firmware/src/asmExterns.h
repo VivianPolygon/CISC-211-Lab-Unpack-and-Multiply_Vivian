@@ -22,15 +22,15 @@
 
 extern uint32_t nameStrPtr;
 
+extern int32_t packed_Value;
 extern int32_t a_Multiplicand;
 extern int32_t b_Multiplier;
-extern int32_t rng_Error;
 extern int32_t a_Sign;
 extern int32_t b_Sign;
 extern int32_t prod_Is_Neg;
 extern int32_t a_Abs;
 extern int32_t b_Abs;
-extern int32_t init_Product;
+extern int32_t abs_Product;
 extern int32_t final_Product;
 
 

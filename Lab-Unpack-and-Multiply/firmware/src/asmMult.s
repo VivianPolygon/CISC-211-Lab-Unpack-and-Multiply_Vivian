@@ -21,31 +21,31 @@ nameStr: .asciz "Inigo Montoya"
 .type nameStrPtr,%gnu_unique_object
 nameStrPtr: .word nameStr   /* Assign the mem loc of nameStr to nameStrPtr */
 
-.global a_Multiplicand,b_Multiplier,rng_Error,a_Sign,b_Sign,prod_Is_Neg,a_Abs,b_Abs,init_Product,final_Product
+.global packed_Value,a_Multiplicand,b_Multiplier,a_Sign,b_Sign,prod_Is_Neg,a_Abs,b_Abs,abs_Product,final_Product
+.type packed_Value,%gnu_unique_object
 .type a_Multiplicand,%gnu_unique_object
 .type b_Multiplier,%gnu_unique_object
-.type rng_Error,%gnu_unique_object
 .type a_Sign,%gnu_unique_object
 .type b_Sign,%gnu_unique_object
 .type prod_Is_Neg,%gnu_unique_object
 .type a_Abs,%gnu_unique_object
 .type b_Abs,%gnu_unique_object
-.type init_Product,%gnu_unique_object
+.type abs_Product,%gnu_unique_object
 .type final_Product,%gnu_unique_object
 
 /* NOTE! These are only initialized ONCE, right before the program runs.
  * If you want these to be 0 every time asmMult gets called, you must set
  * them to 0 at the start of your code!
  */
+packed_Value:    .word     0  
 a_Multiplicand:  .word     0  
 b_Multiplier:    .word     0  
-rng_Error:       .word     0  
 a_Sign:          .word     0  
 b_Sign:          .word     0 
 prod_Is_Neg:     .word     0  
 a_Abs:           .word     0  
 b_Abs:           .word     0 
-init_Product:    .word     0
+abs_Product:     .word     0
 final_Product:   .word     0
 
  /* Tell the assembler that what follows is in instruction memory    */
@@ -61,7 +61,7 @@ function description:
 where:
      output: 
      
-     function description: See Lab Overview lecture slides
+     function description: See Lab Instructions
      
      notes:
         None
@@ -91,7 +91,7 @@ done:
     /* restore the caller's registers, as required by the 
      * ARM calling convention 
      */
-screen_shot:    pop {r4-r11,LR}
+    pop {r4-r11,LR}
 
     mov pc, lr	 /* asmMult return to caller */
    

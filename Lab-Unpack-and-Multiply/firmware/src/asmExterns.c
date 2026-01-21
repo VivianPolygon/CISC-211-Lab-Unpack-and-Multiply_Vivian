@@ -143,15 +143,15 @@ static int ExampleLocalFunction(int param1, int param2) {
     Refer to the example_file.h interface header for function usage details.
  */
 void asmExternsInit(void) {
+    packed_Value = 0xDEADBEEF;
     a_Multiplicand = 0xDEADBEEF;
     b_Multiplier = 0xDEADBEEF;
-    rng_Error = 0xDEADBEEF;
     a_Sign = 0xDEADBEEF;
     b_Sign = 0xDEADBEEF;
     prod_Is_Neg = 0xDEADBEEF;
     a_Abs = 0xDEADBEEF;
     b_Abs = 0xDEADBEEF;
-    init_Product = 0xDEADBEEF;
+    abs_Product = 0xDEADBEEF;
     final_Product = 0xDEADBEEF;
  
     return;
