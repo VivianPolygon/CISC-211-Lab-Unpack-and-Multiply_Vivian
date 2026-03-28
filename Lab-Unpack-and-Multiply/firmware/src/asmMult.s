@@ -82,16 +82,27 @@ asmMult:
     /*** STUDENTS: Place your code BELOW this line!!! **************/
     
     /* Foreword -
-	I tried to use functions and the stack as much as I could. Additionaly I went linearly down the list of labels to calculate
-     values for, and worked them out. I could of likly made much more performant code by working on them in different orders, 
-     such as calculating sign and abs together. additionaly, I could have used the higher registers (r4-r11) more to store data
-     instead of the stack, as the stack is likley less performant to push and pop to than the MOV instruction.  
+	    I tried to use functions and the stack as much as I could. Additionaly I went linearly down the list of labels to calculate
+	values for, and worked them out. I could of made much more performant code by working on them in different orders, 
+	such as calculating sign and abs together.
+	    
+	    I often used the stack to store a value I would only need again later one time. I could have used the 
+	higher registers (r4-r11) more to store data instead of the stack. The stack is likley less performant to push and pop to 
+	as compared to a pair of MOV instructions, as the former requires writes to and reads from memory under the hood.  
+	
+	    Initialization could also be done more efficiently, as the function it branches to could be done in one line after the
+	address is set. if we store 0 in a register, say r1, we can then just run STR r1 [r0] after each LDR r0 =label. This requires
+	one less instruction for each initialization except the first compared to the subroutine "initAddress0". This approach also
+	avoids any overhead produced by branching and the subroutine calling convention. 
+	    
+	    I wanted to get some practice using subroutines and the stack.
      */
       
-    /* initilization of each variable to 0. defined a function. two instructions on each line for compactness and readability */
+    /* initilization of each variable to 0. packed value can be stored immediatly.
+     Two instructions are on each line for compactness and readability */
     LDR r1, =packed_Value;    STR r0, [r1]
     push {r0} /* store on stack for convenient retreival after other initialization */
-    LDR r0, =a_Multiplicand;  BL initAddress0
+    LDR r0, =a_Multiplicand;  BL initAddress0 /* "initAddress0" is a function that initialized the memory at an adress in r0 to 0. */
     LDR r0, =b_Multiplier;    BL initAddress0
     LDR r0, =a_Sign;          BL initAddress0
     LDR r0, =b_Sign;          BL initAddress0
@@ -252,19 +263,19 @@ ABS:
     /* OUTPUT: r0 contains the product */
 positiveMultiplyShiftAndAdd:
     push {r4-r11,LR}
-    MOV r2, 0 /* product register, initialize product to 0 */
+    MOV r4, 0 /* product register, initialize product to 0 */
     multEQ0: 
     CMP r1, 0 /* check for if the multiplier is 0. multiplication is complete if it is */
     BEQ multComplete
     /* checks and addition */
     TST r1, 0x00000001 /* checks if the last bit of the multiplier is 1, if it is, we add the multiplicand to the product */
-    ADDNE r2, r2, r0 /* adds to product if LSB is set */
+    ADDNE r4, r4, r0 /* adds to product if LSB is set */
     /* logical shifts, models how multiplication of large numbers is ussualy done by hand */
     LSR r1, 1 /* shifts the multiplier to the right */
     LSL r0, 1 /* shifts the multiplicand to the left */
     B multEQ0 /* loop, moves to the zero check and repeats */
     multComplete: /* only hit when the multiplier is 0 */
-    MOV r0, r2 /* move product into the r0 register, as it is the expected output register */
+    MOV r0, r4 /* move product into the r0 register, as it is the expected output register */
     pop {r4-r11,LR}
     BX LR
     
